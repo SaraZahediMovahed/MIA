@@ -25,8 +25,6 @@ BASE_URL = "http://34.63.153.158"   #DONOT CHANGE
 API_KEY = api_key
 TASK_ID = "01-mia"  #DONOT CHANGE
 
-print(f"API_KEY: {API_KEY}")
-
 # dataset classes
 class TaskDataset(Dataset):
     def __init__(self, transform=None):
