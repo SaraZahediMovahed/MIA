@@ -60,24 +60,6 @@ The script will automatically:
 
 ## Running on HPC (HTCondor)
 
-Create a file `mia.sub`:
-
-```condor
-executable   = /usr/bin/python3
-arguments    = task_template.py
-
-transfer_input_files  = task_template.py, pub.pt, priv.pt, model.pt, API_KEY.txt
-should_transfer_files = YES
-when_to_transfer_output = ON_EXIT
-transfer_output_files = submission.csv
-
-log    = job_id.log
-output = job_id.out
-error  = job_id.err
-
-queue
-```
-
 Submit with:
 
 ```bash
