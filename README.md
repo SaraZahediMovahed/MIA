@@ -28,7 +28,8 @@ Create a file named `API_KEY.txt` in the same folder as the script and paste
 your personal API key inside it (no quotes, no newlines):
 
 ```
-your_api_key_here
+open_api_key = open("API_KEY.txt", "r").read().strip()
+API_KEY = open_api_key
 ```
 
 ### 4. Place all files in the same directory
