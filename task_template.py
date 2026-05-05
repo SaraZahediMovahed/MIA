@@ -137,7 +137,7 @@ N_IN_PER_POINT = 6
 N_OUT_PER_POINT = N_SHADOW - N_IN_PER_POINT     
 SHADOW_EPOCHS = 60
 SHADOW_WARMUP_EPOCHS = 5
-SHADOW_LABEL_SMOOTHING = 0.10                  
+SHADOW_LABEL_SMOOTHING = 0.08                   # calmer logits → stabler phi/loss for LiRA
 N_AUG = 4 
 N_PUB = len(pub_ds)
 N_PRIV = len(priv_ds)
@@ -573,12 +573,12 @@ def build_features(target_combined, shadow_combined, in_matrix, indices,
         mu_phi_in,  sd_phi_in  = i_phi_mean.mean(),  i_phi_mean.std()  + 1e-6
 
         # floor std estimates (N_IN_PER_POINT IN shadows — stabilize tiny-batch variance)
-        sd_loss_in_c = max(sd_loss_in, 0.06)
-        sd_phi_in_c  = max(sd_phi_in,  0.12)
-        sd_loss_out_c = max(sd_loss,   0.06)
-        sd_phi_out_c  = max(sd_phi,    0.12)
+        sd_loss_in_c = max(sd_loss_in, 0.05)
+        sd_phi_in_c  = max(sd_phi_in,  0.10)
+        sd_loss_out_c = max(sd_loss,   0.05)
+        sd_phi_out_c  = max(sd_phi,    0.10)
         # Shrink IN std toward OUT (small-N IN moments are noisy; stabilises online LLR)
-        _sh = 0.32
+        _sh = 0.26
         sd_loss_in_c = (1.0 - _sh) * sd_loss_in_c + _sh * sd_loss_out_c
         sd_phi_in_c = (1.0 - _sh) * sd_phi_in_c + _sh * sd_phi_out_c
 
@@ -694,7 +694,7 @@ assert abs(pub_X[_idx0, Z_PHI_R] - _z_phi_r0) < 1e-6, (
     f"expected {_z_phi_r0}"
 )
 _mu_phi_in0 = _i_phi_mean0.mean()
-_sd_phi_out0_c = max(_sd_phi0, 0.12)
+_sd_phi_out0_c = max(_sd_phi0, 0.10)
 _online_simple_phi0 = (_mu_phi_in0 - _mu_phi0) * (_ti0["phi"].mean() - 0.5 * (_mu_phi_in0 + _mu_phi0)) / (_sd_phi_out0_c ** 2)
 assert abs(pub_X[_idx0, ONLINE_SIMPLE_PHI] - _online_simple_phi0) < 1e-6, (
     f"Feature index ONLINE_SIMPLE_PHI wrong: got pub_X[0, ONLINE_SIMPLE_PHI]={pub_X[_idx0, ONLINE_SIMPLE_PHI]}, "
@@ -748,7 +748,7 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
     Xtr_f = sc_full.fit_transform(pub_X[tr])
     Xva_f = sc_full.transform(pub_X[va])
     Xpv_f = sc_full.transform(priv_X)
-    lr_f = LogisticRegression(C=0.22, max_iter=3000, solver="lbfgs")
+    lr_f = LogisticRegression(C=0.3, max_iter=3000, solver="lbfgs")
     lr_f.fit(Xtr_f, pub_y[tr])
     oof_lr_full[va] = lr_f.predict_proba(Xva_f)[:, 1]
     priv_lr_full += lr_f.predict_proba(Xpv_f)[:, 1]
@@ -758,23 +758,23 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
     Xtr_c = sc_core.fit_transform(pub_X[tr][:, CORE_COLS])
     Xva_c = sc_core.transform(pub_X[va][:, CORE_COLS])
     Xpv_c = sc_core.transform(priv_X[:, CORE_COLS])
-    lr_c = LogisticRegression(C=0.65, max_iter=3000, solver="lbfgs")
+    lr_c = LogisticRegression(C=1.0, max_iter=3000, solver="lbfgs")
     lr_c.fit(Xtr_c, pub_y[tr])
     oof_lr_core[va] = lr_c.predict_proba(Xva_c)[:, 1]
     priv_lr_core += lr_c.predict_proba(Xpv_c)[:, 1]
 
     # MLP: non-linear, small capacity, strong regularisation + early stopping
     mlp = MLPClassifier(
-        hidden_layer_sizes=(48, 24),
+        hidden_layer_sizes=(64, 32),
         activation="relu",
         solver="adam",
-        alpha=4e-3,
+        alpha=1e-3,
         batch_size=256,
         learning_rate_init=1e-3,
         max_iter=200,
         early_stopping=True,
-        validation_fraction=0.2,
-        n_iter_no_change=8,
+        validation_fraction=0.15,
+        n_iter_no_change=10,
         random_state=fold,
     )
     mlp.fit(Xtr_f, pub_y[tr])
@@ -785,8 +785,8 @@ priv_lr_full /= skf.get_n_splits()
 priv_lr_core /= skf.get_n_splits()
 priv_mlp     /= skf.get_n_splits()
 
-oof_lr_blend = 0.45 * _rank01(oof_lr_full) + 0.55 * _rank01(oof_lr_core)
-priv_lr_blend = 0.45 * _rank01(priv_lr_full) + 0.55 * _rank01(priv_lr_core)
+oof_lr_blend = 0.5 * _rank01(oof_lr_full) + 0.5 * _rank01(oof_lr_core)
+priv_lr_blend = 0.5 * _rank01(priv_lr_full) + 0.5 * _rank01(priv_lr_core)
 
 t_lr_full = _eval("OOF-LR-FULL", oof_lr_full, pub_y)
 t_lr_core = _eval("OOF-LR-CORE", oof_lr_core, pub_y)
@@ -815,7 +815,7 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
         sc_pc = StandardScaler()
         Xtr_pc = sc_pc.fit_transform(pub_X[tr_c])
         Xva_pc = sc_pc.transform(pub_X[va_c])
-        lr_pc = LogisticRegression(C=0.35, max_iter=3000, solver="lbfgs")
+        lr_pc = LogisticRegression(C=0.5, max_iter=3000, solver="lbfgs")
         lr_pc.fit(Xtr_pc, pub_y[tr_c])
         oof_lr_perclass[va_c] = lr_pc.predict_proba(Xva_pc)[:, 1]
         if priv_mask_c.any():
@@ -1031,7 +1031,7 @@ ENSEMBLE_LEARNED = {
 }
 non_learned_best = max((k for k in candidates if k not in LEARNED),
                        key=lambda k: candidates[k][0])
-OCCAM_MARGIN = 0.0045
+OCCAM_MARGIN = 0.003
 marginal = (
     candidates[plain_best][0] - candidates[non_learned_best][0]
 )
@@ -1052,7 +1052,7 @@ else:
 # If the pub champion is outside rank-fusion pools but the best fusion is within this
 # margin, prefer the fusion for submission (may lower printed pub score slightly).
 ROBUST_SUBMIT_POOL = frozenset(ENSEMBLE_LEARNED)
-PRIV_PUB_GAP_GUARD = 0.0075
+PRIV_PUB_GAP_GUARD = 0.0055
 champion_t = candidates[plain_best][0]
 if plain_best not in ROBUST_SUBMIT_POOL:
     best_robust = max(ROBUST_SUBMIT_POOL, key=lambda k: candidates[k][0])
