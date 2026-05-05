@@ -60,6 +60,8 @@ The script will automatically:
 
 ## Running on HPC (HTCondor)
 
+`mia.sub` runs jobs on the cluster using `run.sh`, which installs dependencies from `requirements.txt` and executes `task_template.py`. Required files, including model checkpoints and API keys, are transferred to the compute node before execution. Logs are written to the `runlogs/` directory, and the generated `submission.csv` file is transferred back after completion.
+
 Submit with:
 
 ```bash
