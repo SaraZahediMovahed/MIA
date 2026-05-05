@@ -111,6 +111,7 @@ tail -f job_id.out
 ASSIGNMENT METRIC  |  Score = TPR@5%FPR
 Selected attack: online_S_dual
 Score (TPR@5%FPR), pub OOF: ~0.069
+Score on the Public Leaderboard (TPR@5%FPR), on 30% of the Private Data: 0.063560
 ```
 
 The script prints a full diagnostic including per-candidate TPR@5%FPR before
