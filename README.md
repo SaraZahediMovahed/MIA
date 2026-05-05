@@ -81,7 +81,7 @@ queue
 Submit with:
 
 ```bash
-condor_submit job.sub
+condor_submit mia.sub
 ```
 
 Monitor with:
