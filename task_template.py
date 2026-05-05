@@ -132,7 +132,7 @@ class CombinedDS(Dataset):
 
 
 # hyperparameters
-N_SHADOW = 64
+N_SHADOW = 32
 N_IN_PER_POINT = 6                              
 N_OUT_PER_POINT = N_SHADOW - N_IN_PER_POINT     
 SHADOW_EPOCHS = 60
