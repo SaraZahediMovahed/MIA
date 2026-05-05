@@ -1,10 +1,8 @@
-# Membership inference — reproducibility
+# Membership inference Attach - Trustworthy Machine Learning Course 
 
 **Repository:** https://github.com/SaraZahediMovahed/MIA  
 
-This README only describes how to **reproduce our best leaderboard result** for the Trustworthy ML (Saarland) MIA task (`01-mia`): same pipeline, same metric (**TPR at 5% FPR**), and the same automatic selection of the strongest attack on the public split before submitting private scores.
-
-## What you need
+## Requriements
 
 - **Python 3.10+** (3.11 works well).
 - **Task data** next to the script (not in this repo): `pub.pt`, `priv.pt`, and `model.pt`. Obtain them from the course materials or download location for the assignment.
