@@ -1,0 +1,20 @@
+universe = docker
+docker_image = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable = /bin/bash
+arguments = run.sh
+output = runlogs/mia.$(ClusterId).$(ProcId).out
+error = runlogs/mia.$(ClusterId).$(ProcId).err
+log = runlogs/mia.$(ClusterId).log‌ ‌
+should_transfer_files = YES
+transfer_input_files = run.sh,requirements.txt,task_template.py,API_KEY.txt,model.pt,pub.pt,priv.pt
+when_to_transfer_output = ON_EXIT
+transfer_output_files = submission.csv
+stream_output = True
+stream_error  = True
+request_GPUs = 1
+request_CPUs = 1
+request_memory = 4G
+requirements = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted = true
++WantScratchMounted = true
+queue 1
