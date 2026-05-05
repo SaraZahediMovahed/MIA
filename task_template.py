@@ -470,8 +470,7 @@ def _trim_mean_std(a, prop=0.1):
 
 def build_features(target_combined, shadow_combined, in_matrix, indices,
                    class_phi_mean, class_loss_mean):
-    # per-example feature vector: target signals, offline/robust LiRA z-scores,
-    # per-class normalisation, IN-distribution stats, online-LiRA scores
+
     feats = []
     for ci in indices:
         ti = _info_arrs(target_combined[ci])
@@ -614,7 +613,7 @@ def build_features(target_combined, shadow_combined, in_matrix, indices,
 
 print("\nBuilding feature matrices...")
 
-# per-class means over the joint pub+priv pool (uses only classification labels)
+
 class_phi_mean = {}
 class_loss_mean = {}
 for c in range(9):
@@ -644,37 +643,33 @@ pub_X = np.nan_to_num(pub_X, nan=0.0, posinf=1e6, neginf=-1e6)
 priv_X = np.nan_to_num(priv_X, nan=0.0, posinf=1e6, neginf=-1e6)
 print(f"Feature shapes:  pub_X={pub_X.shape}  priv_X={priv_X.shape}")
 
-# feature column indices (layout must match build_features)
-N_TARGET_RAW = 4 * N_AUG + 2  # loss, phi, conf, true_p × N_AUG views + entropy + margin
-N_TARGET_AGG = 15   # block 2
-N_OUT_BASIC = 10    # block 3: mu/sd of 4 stats + mu_truep + mu_conf
-N_Z_RAWDIFF = 10    # block 4: 4 z-scores + 6 raw diffs
+# feature column indices
+N_TARGET_RAW = 4 * N_AUG + 2
+N_TARGET_AGG = 15  
+N_OUT_BASIC = 10    
+N_Z_RAWDIFF = 10    
 N_ROBUST_BASIC = 4
 N_ROBUST_Z = 4
 N_PERCLASS = 8
 
-# block 4: offline z-scores
 Z_BASE = N_TARGET_RAW + N_TARGET_AGG + N_OUT_BASIC
 Z_LOSS = Z_BASE + 0
 Z_LOSS_MIN = Z_BASE + 1
 Z_PHI = Z_BASE + 2
 Z_PHI_MAX = Z_BASE + 3
 
-# block 5: robust z-scores
 ROBUST_Z_BASE = Z_BASE + N_Z_RAWDIFF + N_ROBUST_BASIC
 Z_LOSS_R = ROBUST_Z_BASE + 0
 Z_LOSS_MIN_R = ROBUST_Z_BASE + 1
 Z_PHI_R = ROBUST_Z_BASE + 2
 Z_PHI_MAX_R = ROBUST_Z_BASE + 3
 
-# block 7: online LiRA (after 8 per-class cols + 8 IN basic/diff cols)
 ONLINE_BASE = ROBUST_Z_BASE + N_ROBUST_Z + N_PERCLASS
 ONLINE_LL_LOSS = ONLINE_BASE + 8
 ONLINE_LL_PHI = ONLINE_BASE + 9
 ONLINE_SIMPLE_LOSS = ONLINE_BASE + 10
 ONLINE_SIMPLE_PHI = ONLINE_BASE + 11
 
-# sanity check: feature column layout must match build_features
 _idx0 = 0
 _ti0 = _info_arrs(target_combined[_idx0])
 _out_s0 = [s for s in range(N_SHADOW) if not in_matrix[s, _idx0]]
@@ -721,8 +716,6 @@ for name, idx in [
     _eval(name, pub_X[:, idx], pub_y)
 
 
-# attack classifiers: global LR (full + core), MLP, per-class LR + blends
-# rank-fusion blending ensures no single attacker can dominate the prediction
 print("=" * 60)
 print("Training attack classifiers with 5-fold CV")
 print("=" * 60)
@@ -743,7 +736,7 @@ priv_lr_core = np.zeros(N_PRIV, dtype=np.float64)
 priv_mlp     = np.zeros(N_PRIV, dtype=np.float64)
 
 for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
-    # full LR: all features, tighter C to regularise the noise-heavy dims
+    
     sc_full = StandardScaler()
     Xtr_f = sc_full.fit_transform(pub_X[tr])
     Xva_f = sc_full.transform(pub_X[va])
@@ -753,7 +746,7 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
     oof_lr_full[va] = lr_f.predict_proba(Xva_f)[:, 1]
     priv_lr_full += lr_f.predict_proba(Xpv_f)[:, 1]
 
-    # core LR: LiRA score columns only -- low dim, hard to overfit
+    
     sc_core = StandardScaler()
     Xtr_c = sc_core.fit_transform(pub_X[tr][:, CORE_COLS])
     Xva_c = sc_core.transform(pub_X[va][:, CORE_COLS])
@@ -763,7 +756,7 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
     oof_lr_core[va] = lr_c.predict_proba(Xva_c)[:, 1]
     priv_lr_core += lr_c.predict_proba(Xpv_c)[:, 1]
 
-    # MLP: non-linear, small capacity, strong regularisation + early stopping
+    
     mlp = MLPClassifier(
         hidden_layer_sizes=(64, 32),
         activation="relu",
@@ -794,8 +787,7 @@ t_lr_blend = _eval("OOF-LR-BLEND", oof_lr_blend, pub_y)
 t_mlp     = _eval("OOF-MLP",      oof_mlp,     pub_y)
 
 
-# per-class LR: one LR per classification label (loss/phi distributions
-# are strongly class-dependent), using the same folds as the global CV
+
 print("Training per-class LR attacker (9 classes) ...")
 pub_class = np.array([target_combined[i]["label"] for i in range(N_PUB)])
 priv_class = np.array([target_combined[N_PUB + i]["label"] for i in range(N_PRIV)])
@@ -823,7 +815,6 @@ for fold, (tr, va) in enumerate(skf.split(pub_X, pub_y)):
             priv_lr_perclass[priv_mask_c] += lr_pc.predict_proba(Xpv_pc)[:, 1]
             priv_fold_counts[priv_mask_c] += 1.0
 
-# average across folds; fall back to lr_full if no per-class fit available
 priv_lr_perclass = np.where(
     priv_fold_counts > 0,
     priv_lr_perclass / np.maximum(priv_fold_counts, 1.0),
@@ -833,7 +824,7 @@ priv_lr_perclass = np.where(
 t_lr_perclass = _eval("OOF-LR-PERCLASS", oof_lr_perclass, pub_y)
 
 
-# rank-fusion blends of the learned attackers
+
 oof_super = (
     _rank01(oof_lr_full)
     + _rank01(oof_lr_core)
@@ -848,7 +839,6 @@ priv_super = (
 ) / 4.0
 t_super = _eval("OOF-SUPER-BLEND", oof_super, pub_y)
 
-# 3-way blend without per-class (per-class can be noisy in small-class folds)
 oof_blend3 = (
     _rank01(oof_lr_full) + _rank01(oof_lr_core) + _rank01(oof_mlp)
 ) / 3.0
@@ -857,7 +847,6 @@ priv_blend3 = (
 ) / 3.0
 t_blend3 = _eval("OOF-BLEND3", oof_blend3, pub_y)
 
-# Rank fusions of complementary scalars (often generalize better than a single z at TPR@5%FPR)
 oof_z_top3 = (
     _rank01(pub_X[:, Z_PHI])
     + _rank01(pub_X[:, Z_PHI_MAX])
@@ -898,7 +887,6 @@ priv_phi_online_rank = (
 ) / 3.0
 t_phi_online_rank = _eval("OOF-PHI-ONLINE-RANK", oof_phi_online_rank, pub_y)
 
-# Rank fuses of the strongest low-FPR families (log: online_S_* and MLP/LR cluster ~0.066–0.068)
 oof_online_S_dual = (
     _rank01(pub_X[:, ONLINE_SIMPLE_PHI]) + _rank01(pub_X[:, ONLINE_SIMPLE_LOSS])
 ) / 2.0
@@ -958,7 +946,6 @@ priv_mia_penta = (
 t_mia_penta = _eval("OOF-MIA-PENTA", oof_mia_penta, pub_y)
 
 
-# choose best candidate on pub OOF TPR@5%FPR (learned attackers + raw z-scores)
 candidates = {
     "lr_full":      (t_lr_full,     oof_lr_full,             priv_lr_full),
     "lr_core":      (t_lr_core,     oof_lr_core,             priv_lr_core),
@@ -1010,9 +997,7 @@ for k, (t, _, _) in sorted(candidates.items(), key=lambda kv: -kv[1][0]):
 
 plain_best = max(candidates, key=lambda k: candidates[k][0])
 
-# Occam veto: single-model learners that barely beat the best scalar baseline
-# can overfit pub — prefer the simpler score. Rank-fusion ensembles already
-# guard against that, so never veto blend3 / super_blend.
+
 LEARNED = {"lr_full", "lr_core", "lr_blend", "mlp", "lr_perclass",
            "blend3", "super_blend"}
 ENSEMBLE_LEARNED = {
@@ -1047,10 +1032,7 @@ if (
 else:
     best_name = plain_best
 
-# Hidden priv labels often behave like a second draw: the top pub-OOF scalar / lone
-# learner can spike on pub yet lose ~0.005 TPR@5%FPR on the real test (seen in practice).
-# If the pub champion is outside rank-fusion pools but the best fusion is within this
-# margin, prefer the fusion for submission (may lower printed pub score slightly).
+
 ROBUST_SUBMIT_POOL = frozenset(ENSEMBLE_LEARNED)
 PRIV_PUB_GAP_GUARD = 0.0055
 champion_t = candidates[plain_best][0]
@@ -1071,11 +1053,9 @@ best_t, best_oof, best_priv = candidates[best_name]
 print(f"\nSELECTED: {best_name} -> OOF TPR@5%FPR = {best_t:.4f}")
 
 
-# build submission
 ids = [target_combined[N_PUB + i]["id"] for i in range(N_PRIV)]
 scores = _rank01(best_priv)  # rank-normalise to [0, 1]
 
-# official metric (TPR@5%FPR), computed on pub OOF after the same rank transform
 assignment_tpr5_ranked = _tpr5(pub_y, _rank01(best_oof))
 print()
 print("=" * 72)
