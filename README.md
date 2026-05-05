@@ -60,7 +60,7 @@ The script will automatically:
 
 ## Running on HPC (HTCondor)
 
-Create a file `job.sub`:
+Create a file `mia.sub`:
 
 ```condor
 executable   = /usr/bin/python3
@@ -71,9 +71,9 @@ should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 transfer_output_files = submission.csv
 
-log    = job.log
-output = job.out
-error  = job.err
+log    = job_id.log
+output = job_id.out
+error  = job_id.err
 
 queue
 ```
@@ -88,7 +88,7 @@ Monitor with:
 
 ```bash
 condor_q
-tail -f job.out
+tail -f job_id.out
 ```
 
 ---
