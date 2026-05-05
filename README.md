@@ -11,7 +11,7 @@ Trustworthy Machine Learning 2026 course at Saarland University / CISPA.
 ### 1. Requirements
 
 ```bash
-pip install torch torchvision numpy scipy pandas scikit-learn requests
+pip install -r requirements.txt
 ```
 
 ### 2. Download the data
@@ -70,11 +70,6 @@ transfer_input_files  = task_template.py, pub.pt, priv.pt, model.pt, API_KEY.txt
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 transfer_output_files = submission.csv
-
-request_cpus    = 4
-request_gpus    = 1
-request_memory  = 16GB
-+RequestWalltime = 86400
 
 log    = job.log
 output = job.out
