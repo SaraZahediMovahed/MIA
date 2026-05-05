@@ -1,40 +1,122 @@
-# Membership inference Attach - Trustworthy Machine Learning Course 
+# Membership Inference Attack — TML26 Task 1
 
-**Repository:** https://github.com/SaraZahediMovahed/MIA  
+This repository contains our implementation of a Membership Inference Attack (MIA)
+against a pretrained ResNet-18 image classifier, submitted for the
+Trustworthy Machine Learning 2026 course at Saarland University / CISPA.
 
-## Requriements
+---
 
-- **Python 3.10+** (3.11 works well).
-- **Task data** next to the script (not in this repo): `pub.pt`, `priv.pt`, and `model.pt`. Obtain them from the course materials or download location for the assignment.
-- **`API_KEY.txt`** in the folder you run from (same directory as `task_template.py`): one line, your course API key. The script reads this at startup and uses it again when uploading `submission.csv`.
+## How to Recreate the Best Leaderboard Result
 
-## Setup
+### 1. Requirements
 
 ```bash
-git clone https://github.com/SaraZahediMovahed/MIA.git
-cd MIA
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-# Put pub.pt, priv.pt, model.pt here and add API_KEY.txt
+pip install torch torchvision numpy scipy pandas scikit-learn requests
 ```
 
-## Run (full pipeline → best submission)
+### 2. Download the data
 
-From the directory that contains `task_template.py` and the three `.pt` files:
+```bash
+wget "https://huggingface.co/datasets/SprintML/tml26_task1/resolve/main/pub.pt"
+wget "https://huggingface.co/datasets/SprintML/tml26_task1/resolve/main/priv.pt"
+wget "https://huggingface.co/datasets/SprintML/tml26_task1/resolve/main/model.pt"
+```
+
+### 3. Set up your API key
+
+Create a file named `API_KEY.txt` in the same folder as the script and paste
+your personal API key inside it (no quotes, no newlines):
+
+```
+your_api_key_here
+```
+
+### 4. Place all files in the same directory
+
+```
+your_folder/
+├── task_template.py      ← main attack script
+├── pub.pt
+├── priv.pt
+├── model.pt
+└── API_KEY.txt
+```
+
+### 5. Run the attack
 
 ```bash
 python task_template.py
 ```
 
-The script:
+The script will automatically:
+- Load the target ResNet-18 model and both datasets
+- Train 32 shadow models on the combined pub+priv pool
+- Extract LiRA features (phi scores, losses, z-scores) for every sample
+- Train attack classifiers (Logistic Regression, MLP) with 5-fold CV
+- Select the best attack variant based on pub OOF TPR@5%FPR
+- Save `submission.csv` and submit it to the leaderboard
 
-1. Loads the target ResNet-18 and applies the fixed normalization from training.  
-2. Trains **32 shadow models** on the combined public+private pool with the documented schedule (SGD, cosine schedule, warmup, label smoothing, flip + reflect-padded crop).  
-3. Builds **LiRA-style features** (shadow IN/OUT statistics, z-scores, online likelihood-style terms, class-conditional cues) and trains several **light attack models** with **5-fold stratified CV** on the public labels.  
-4. **Selects** the candidate with the best **out-of-fold TPR@5%FPR**, applying the same small “robust ensemble” guards coded in the file when appropriate.  
-5. Writes **`submission.csv`** (rank-normalized scores for private IDs) and **POSTs it** to the grading server.
+---
 
-Expect a long run on CPU; a GPU speeds up shadow training and feature extraction.
+## Running on HPC (HTCondor)
 
-**Our report’s leaderboard number** (TPR@FPR=0.05 ≈ **0.06356**) comes from this exact script and data; your rerun should match up to environment noise unless the platform or data revision changes.
+Create a file `job.sub`:
+
+```condor
+executable   = /usr/bin/python3
+arguments    = task_template.py
+
+transfer_input_files  = task_template.py, pub.pt, priv.pt, model.pt, API_KEY.txt
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = submission.csv
+
+request_cpus    = 4
+request_gpus    = 1
+request_memory  = 16GB
++RequestWalltime = 86400
+
+log    = job.log
+output = job.out
+error  = job.err
+
+queue
+```
+
+Submit with:
+
+```bash
+condor_submit job.sub
+```
+
+Monitor with:
+
+```bash
+condor_q
+tail -f job.out
+```
+
+---
+
+## Key Hyperparameters
+
+| Parameter | Value | Description |
+|---|---|---|
+| `N_SHADOW` | 32 | Number of shadow models |
+| `N_IN_PER_POINT` | 6 | IN shadows per sample |
+| `SHADOW_EPOCHS` | 60 | Training epochs per shadow |
+| `N_AUG` | 4 | Test-time augmentation views |
+| Attack selection | auto | Best OOF TPR@5%FPR on pub |
+
+---
+
+## Expected Output
+
+```
+ASSIGNMENT METRIC  |  Score = TPR@5%FPR
+Selected attack: online_S_dual
+Score (TPR@5%FPR), pub OOF: ~0.069
+```
+
+The script prints a full diagnostic including per-candidate TPR@5%FPR before
+submitting the best one automatically.
